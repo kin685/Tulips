@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tulip Firework Peak Display</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tempCanvas = document.createElement('canvas');
+const tCtx = tempCanvas.getContext('2d');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let particles = [];
+let rockets = [];
+let clickCount = 0;
+const words = ["I MISS YOU :("];
+
+function drawTulip() {
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2 + 50;
+
+    // Stem
+    ctx.strokeStyle = '#2d5a27';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 80);
+    ctx.quadraticCurveTo(cx - 10, cy + 40, cx, cy);
+    ctx.stroke();
+
+    // Petals
+    ctx.fillStyle = '#ff4d6d';
+    // Left
+    ctx.beginPath();
+    ctx.ellipse(cx - 10, cy - 15, 12, 22, -Math.PI / 8, 0, Math.PI * 2);
+    ctx.fill();
+    // Right
+    ctx.beginPath();
+    ctx.ellipse(cx + 10, cy - 15, 12, 22, Math.PI / 8, 0, Math.PI * 2);
+    ctx.fill();
+    // Middle
+    ctx.fillStyle = '#ff758f';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 10, 10, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pot
+    ctx.fillStyle = '#5c3d2e';
+    ctx.beginPath();
+    ctx.moveTo(cx - 25, cy + 80);
+    ctx.lineTo(cx + 25, cy + 80);
+    ctx.lineTo(cx + 15, cy + 110);
+    ctx.lineTo(cx - 15, cy + 110);
+    ctx.closePath();
+    ctx.fill();
+}
+
+class Rocket {
+    constructor(targetX, targetY, isWordRocket) {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2 + 80; // Start at the pot
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.isWordRocket = isWordRocket;
+        this.speed = 12;
+        
+        const angle = Math.atan2(targetY - this.y, targetX - this.x);
+        this.velocity = {
+            x: Math.cos(angle) * this.speed,
+            y: Math.sin(angle) * this.speed
+        };
+        this.hue = Math.random() * 360;
+    }
+
+    update() {
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+
+        // Calculate distance to the "tap" point
+        const dist = Math.hypot(this.targetX - this.x, this.targetY - this.y);
+
+        // Once the rocket is "done" going up (reaches the target)
+        if (dist < 15) {
+            if (this.isWordRocket) {
+                createWordExplosion(this.x, this.y, this.hue);
+            } else {
+                createExplosion(this.x, this.y, this.hue);
+            }
+            return false; // Destroy rocket
+        }
+        return true;
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+        ctx.fill();
+        ctx.shadowBlur = 0; // Reset shadow for other drawings
+    }
+}
+
+class Particle {
+    constructor(x, y, hue, isWord = false) {
+        this.x = x;
+        this.y = y;
+        this.hue = hue;
+        this.alpha = 1;
+        this.decay = isWord ? 0.007 : 0.02; // Words stay longer
+        this.velocity = {
+            x: (Math.random() - 0.5) * (isWord ? 2.5 : 12),
+            y: (Math.random() - 0.5) * (isWord ? 2.5 : 12)
+        };
+        this.gravity = 0.03;
+    }
+
+    update() {
+        this.velocity.y += this.gravity;
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        this.alpha -= this.decay;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 65%)`;
+        ctx.fillRect(this.x, this.y, 2, 2);
+        ctx.restore();
+    }
+}
+
+function createExplosion(x, y, hue) {
+    for (let i = 0; i < 50; i++) {
+        particles.push(new Particle(x, y, hue));
+    }
+}
+
+function createWordExplosion(x, y, hue) {
+    const word = words[Math.floor(Math.random() * words.length)];
+    tempCanvas.width = 400;
+    tempCanvas.height = 100;
+    tCtx.clearRect(0,0,400,100);
+    tCtx.fillStyle = 'white';
+    tCtx.font = 'bold 35px Courier New'; // Classic TikTok style font
+    tCtx.textAlign = 'center';
+    tCtx.fillText(word, 200, 50);
+
+    const data = tCtx.getImageData(0, 0, 400, 100).data;
+    for (let i = 0; i < data.length; i += 24) { 
+        if (data[i + 3] > 128) {
+            const px = (i / 4) % 400;
+            const py = Math.floor((i / 4) / 400);
+            particles.push(new Particle(x + (px - 200), y + (py - 50), hue, true));
+        }
+    }
+}
+
+function animate() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawTulip();
+
+    rockets = rockets.filter(r => { 
+        r.draw(); 
+        return r.update(); 
+    });
+    
+    particles = particles.filter(p => { 
+        p.draw(); 
+        p.update();
+        return p.alpha > 0; 
+    });
+
+    requestAnimationFrame(animate);
+}
+
+window.addEventListener('mousedown', (e) => {
+    clickCount++;
+    // Every 4th rocket is a word rocket
+    const isWord = (clickCount % 4 === 0);
+    rockets.push(new Rocket(e.clientX, e.clientY, isWord));
+});
+
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+animate();
+</script>
+</body>
+</html>
